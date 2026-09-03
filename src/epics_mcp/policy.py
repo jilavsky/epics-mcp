@@ -495,6 +495,25 @@ class Policy:
 
         return None
 
+    def is_potentially_writable(self, pv: str) -> bool:
+        """Whether *some* value of this PV could be written, ignoring the
+        specific range/enum/step/max_delta constraint a real value would
+        also have to satisfy.
+
+        For `epics_pv_search` and `epics_pv_info` results, which have no
+        candidate value to check a constraint against -- this answers
+        "is there a door here at all", not "would this specific knock work".
+        """
+        if not self.writes_enabled:
+            return False
+        if not self.builtin_write_denies_disabled:
+            upper = pv.upper()
+            if any(upper.endswith(f) for f in BUILTIN_WRITE_DENIED_FIELDS):
+                return False
+        if any(r.matches(pv) for r in self.deny):
+            return False
+        return any(r.matches(pv) for r in self.writes)
+
     # -- introspection ------------------------------------------------------
 
     def describe(self) -> dict[str, Any]:

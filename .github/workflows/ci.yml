@@ -69,12 +69,20 @@ jobs:
         run: |
           /tmp/wheel-check/bin/python -c "import epics_mcp; print(epics_mcp.__version__)"
 
-      # TODO(phase 4): once src/epics_mcp/cli.py exists, add the console-script
-      # smoke test the sibling projects run --
-      #     /tmp/wheel-check/bin/epics-mcp --help > /dev/null
-      # and a check that `epics-mcp` with no --policy exits non-zero, which is
-      # the "no policy, no PVs" guarantee (PLAN.md 4.2) asserted at the
-      # packaging level rather than only in the unit tests.
+      - name: Verify the console script runs
+        run: /tmp/wheel-check/bin/epics-mcp --help > /dev/null
+
+      # PLAN.md 4.2: "no policy, no PVs" -- the server refuses to start
+      # without one. Asserted here at the packaging level, not just in the
+      # unit tests, because this is the one guarantee a reviewer should be
+      # able to check without reading any code.
+      - name: Verify no --policy refuses to start (exit 2)
+        run: |
+          set +e
+          EPICS_MCP_POLICY= /tmp/wheel-check/bin/epics-mcp --check
+          status=$?
+          set -e
+          test "$status" -eq 2
 
       - name: pip check (declared dependencies actually resolve)
         run: /tmp/wheel-check/bin/pip check

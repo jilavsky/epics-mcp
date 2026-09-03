@@ -50,12 +50,8 @@ Repository = "https://github.com/jilavsky/epics-mcp"
 Issues = "https://github.com/jilavsky/epics-mcp/issues"
 Changelog = "https://github.com/jilavsky/epics-mcp/blob/main/CHANGELOG.md"
 
-# Commented out until src/epics_mcp/cli.py exists (PLAN.md 6, phase 4).
-# Declaring it now would install an `epics-mcp` command whose only behaviour
-# is a ModuleNotFoundError traceback. Uncomment in the same commit that adds
-# cli.py, and re-enable the console-script smoke test in .github/workflows/ci.yml.
-# [project.scripts]
-# epics-mcp = "epics_mcp.cli:main"
+[project.scripts]
+epics-mcp = "epics_mcp.cli:main"
 
 # DEVIATION from the house standard (flat <pkg>/ at repo root, as in pyirena
 # and aievaluator): a src/ layout, chosen deliberately to match AIDA

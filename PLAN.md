@@ -368,23 +368,29 @@ monitoring is a later optimisation if the poll rate is ever a problem.
 Each phase is useful on its own and none is undone by the next. Phase 0 is
 this commit.
 
-| # | Deliverable | Done when |
-|---|---|---|
-| **0** | Repo, packaging, environment, this plan, example policies | *(this commit)* |
-| **1** | `policy.py` + its test matrix | The shipped example policies load, and the deny/allow/exact-name-exception table is green |
-| **2** | `ca_client.py`: `PvReading`, `FakeBackend`, `PyepicsBackend` (get/get_many only) | `pytest` green with no EPICS installed |
-| **3** | `catalog.py`, `audit.py`, `ratelimit.py` | Rotation and token expiry tested with a frozen clock |
-| **4** | `server.py` read tools + `cli.py` stdio: `pv_get`, `pv_info`, `pv_search`, `policy_describe` | AIDA connects over stdio and answers "what is `usxLAX:m58:c0:m1.RBV`?" against `FakeBackend` |
-| **5** | `pv_watch` | Bounded, cancellable, capped by `max_watch_seconds`/`max_watch_samples` |
-| **6** | `pv_put`, confirm tokens, constraints, write audit | Write path exercised end-to-end against `FakeBackend`; then against a local `softIoc` under `-m ioc` |
-| **7** | `--transport http`, `doctor`, wheel smoke test in CI | `epics-mcp doctor --policy ...` on usaxscontrol reports green |
-| **8** | AIDA integration: `aida mcp add-epics` preset, `usaxs-staff` workspace, a skill | Staff can ask the question in AIDA without editing `mcp.json` by hand |
+| # | Deliverable | Done when | Status |
+|---|---|---|---|
+| **0** | Repo, packaging, environment, this plan, example policies | *(this commit)* | done |
+| **1** | `policy.py` + its test matrix | The shipped example policies load, and the deny/allow/exact-name-exception table is green | done |
+| **2** | `ca_client.py`: `PvReading`, `FakeBackend`, `PyepicsBackend` | `pytest` green with no EPICS installed | done -- built get/get_many/info/put/monitor together rather than splitting put across phases 2 and 6, since the interface is one small `Protocol` either way; nothing exposes `put` until phase 6's tool gate says so |
+| **3** | `catalog.py`, `audit.py`, `ratelimit.py` | Rotation and token expiry tested with a frozen clock | done |
+| **4** | `server.py` read tools + `cli.py` stdio: `pv_get`, `pv_info`, `pv_search`, `policy_describe` | A real MCP client connects over stdio and answers "what is `usxLAX:m58:c0:m1.RBV`?" against `FakeBackend` | done -- verified against a real `ClientSession` over stdio, not just in-process |
+| **5** | `pv_watch` | Bounded, cancellable, capped by `max_watch_seconds`/`max_watch_samples` | done |
+| **6** | `pv_put`, confirm tokens, constraints, write audit | Write path exercised end-to-end against `FakeBackend`; then against a local `softIoc` under `-m ioc` | code done and exercised end-to-end against `FakeBackend` (deny/range/confirm-token/rate-limit/audit all verified over a real stdio session); **not yet exercised against a `softIoc` or any live IOC**, and not yet run read-only at a real beamline for any length of time -- see the gate below, which still applies to *deployment*, just not to writing the code |
+| **7** | `--transport http`, `doctor`, wheel smoke test in CI | `epics-mcp doctor --policy ...` on usaxscontrol reports green | partial -- `doctor` done (mirrors `aievaluator/doctor.py`); `--transport http` serves via `streamable-http` with host/port but **no bearer-token auth yet**, and confirm-token/audit identity is not yet bound to a specific client connection (fine for stdio's one-process-per-client shape, not fine once one HTTP server serves several laptops at once -- PLAN.md 3's "session identity for v1" note); wheel smoke test in CI extended to run the console script and check the no-policy exit code |
+| **8** | AIDA integration: `aida mcp add-epics` preset, `usaxs-staff` workspace, a skill | Staff can ask the question in AIDA without editing `mcp.json` by hand | not started |
 
-Phase 6 does not begin until phases 1–5 have run read-only at the beamline
-for long enough that the audit log shows what the model actually asks for.
-`PLAN_INSTRUMENT_INTEGRATION.md` §5 step 7 says the same thing; the
-difference here is that the write *machinery* is designed in from the start
-(§4.5–4.7) so enabling it is a policy edit, not a re-architecture.
+**The phase 6 gate is about deployment, not about writing the code.** Phase
+6's write path is implemented and tested against `FakeBackend` -- that is
+what "test to see how this works" (2026-09-03) asked for, and building the
+machinery (confirm tokens, rate limits, the audit intent/outcome pairing)
+alongside the read tools avoided a later re-architecture. What has *not*
+happened, and must not be skipped before any real deployment: running
+phases 1-5 read-only at the beamline long enough for the audit log to show
+what the model actually asks for, and exercising the write path against a
+real IOC (`softIoc` first, then the real instrument) under `-m ioc`. Do not
+point `epics-mcp --policy usaxs-staff` (or any read-write policy) at real
+Channel Access without doing both first.
 
 ---
 
