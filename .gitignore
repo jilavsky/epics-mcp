@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Local operational state that must never reach the repo.
+# The audit log records what an agent did to a live instrument, and a local
+# policy file is installation-specific (and may name PVs that are not public).
+# The shipped, reviewable policies live in examples/ and are tracked.
+*.audit.log
+audit.log
+audit.log.*
+.epics-mcp/
+policies/
+!examples/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Test / coverage
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml

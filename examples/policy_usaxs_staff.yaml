@@ -1,0 +1,150 @@
+# epics-mcp policy -- USAXS / 12-IDE, STAFF, WRITE-ENABLED.
+#
+# =========================================================================
+#  READ THIS BEFORE DEPLOYING. This example has `mode: read-write` and a
+#  non-empty `writes:` list, so an agent connected to a server started with
+#  it CAN change the instrument.
+#
+#  Every rule under `writes:` below is marked with the confidence we have in
+#  it. Anything marked TODO(verify) has a PV name or a bound taken from the
+#  design document, NOT from the running instrument -- confirm the record
+#  exists, confirm the engineering units, and confirm the range is safe
+#  before you deploy this file. A write rule naming a PV that does not exist
+#  is harmless; a write rule with the wrong units is not.
+#
+#  Two ways to run this policy without its writes while you review it:
+#      epics-mcp --policy usaxs-staff --readonly    # CLI wins over the file
+#      (or set `mode: read-only` at the top; `writes:` is then not consulted)
+# =========================================================================
+#
+# This is the policy for the `usaxs-staff` AIDA workspace. It is the
+# read-only policy plus a small, bounded set of writable PVs. It is NOT the
+# policy for the users' workspace -- see policy_usaxs_readonly.yaml.
+#
+#     mkdir -p ~/.epics-mcp/policies
+#     cp examples/policy_usaxs_staff.yaml ~/.epics-mcp/policies/usaxs-staff.yaml
+#     epics-mcp --policy usaxs-staff
+
+version: 1
+mode: read-write
+
+default_timeout_s: 3.0
+max_pvs_per_call: 50
+max_watch_seconds: 30
+max_watch_samples: 300
+
+# Ceiling across all write rules, on top of each rule's own rate_limit_per_min.
+# A runaway agent hits this before it hits anything mechanical.
+max_writes_per_min: 10
+
+catalog: pv_catalog_usaxs.txt
+
+audit:
+  path: ~/.epics-mcp/audit-usaxs-staff.log
+  # Reads logged too: on a write-enabled server the read trail is what lets
+  # you reconstruct why the agent decided to write.
+  log_reads: true
+  log_denials: true
+
+# ---------------------------------------------------------------------------
+# deny -- FIRST, wins over allow and over writes, for reads and writes alike.
+# ---------------------------------------------------------------------------
+deny:
+  - pattern: "re:^12idb.*"
+    note: "B station is not ours."
+  - pattern: "12idd*"
+    note: "D station is not ours."
+  - pattern: "PA:*"
+    note: >
+      Personnel safety system. Readable via the narrower allow rule below;
+      this deny exists so that no future broadening of `writes:` can ever
+      reach a PSS record, because deny wins.
+  - pattern: "S12ID:*"
+    note: "Undulator is readable (allow rule below) but never writable from here."
+  - pattern: "XFD:*"
+    note: "Storage ring is readable (allow rule below) but never writable."
+
+# NOTE on the three denies above: they would also block the reads, so the
+# reads are re-granted by exact-name allow rules -- and the policy loader
+# rejects an allow pattern that a deny pattern shadows *unless* the allow is
+# an exact name (no wildcard). That asymmetry is deliberate: broad deny +
+# narrow named allow is the only way to say "readable, never writable" in a
+# single list, and requiring the allow to be an exact PV name keeps it from
+# quietly re-opening a whole prefix. See PLAN.md 4.3.
+
+# ---------------------------------------------------------------------------
+# allow -- readable.
+# ---------------------------------------------------------------------------
+allow:
+  - pattern: "usx*"
+    note: "All USAXS instrument IOCs."
+  - pattern: "12ida2:*"
+    note: "A2 optics: EnCalc, SL2 white-beam slits, table1, m37-m40, AShtr."
+  - pattern: "12idc:*"
+    note: "C-station SR570 amplifier sensitivity."
+  - pattern: "re:^12idPyFilter:.*"
+    note: "Python filter/attenuator server."
+
+  # Exact names, re-granting reads through the broad denies above.
+  - pattern: "XFD:srCurrent"
+  - pattern: "S12ID:USID:EnergySetC.VAL"
+  - pattern: "S12ID:USID:HarmonicValueC"
+  - pattern: "PA:12ID:STA_A_BEAMREADY_PL.VAL"
+  - pattern: "PA:12ID:STA_C_BEAMREADY_PL.VAL"
+
+# ---------------------------------------------------------------------------
+# writes -- consulted only when `mode: read-write`. A write needs ALL of:
+#   1. mode: read-write, and no --readonly on the command line
+#   2. no `deny` rule matches
+#   3. some rule here matches
+#   4. the value satisfies that rule's range / enum / step constraint
+#   5. the rule's rate_limit_per_min and the global max_writes_per_min allow it
+#   6. if `confirm: true`, a valid, unexpired, single-use confirm token
+#
+# Built-in write denials apply on top and are not listed here: .PROC, .STOP,
+# .SCAN, .FLNK, .INP, .OUT, .CALC, .SDIS and friends are never writable,
+# whatever the patterns below say. See PLAN.md 4.4.
+# ---------------------------------------------------------------------------
+writes:
+
+  # ---- VERIFIED: these records exist and are scratch space by design. ----
+  - pattern: "usxLAX:userCalc*.A"
+    note: >
+      User calculation input A. Scratch records that exist to be written by
+      users; the safest possible demonstration that the write path works
+      end-to-end on a real instrument. Start here when commissioning.
+    range: [-1000000.0, 1000000.0]
+    confirm: false
+    rate_limit_per_min: 30
+
+  # ---- TODO(verify): PV name from the design document, not the instrument. ----
+  - pattern: "usxTEMP:*:SP"
+    note: >
+      TODO(verify) -- Linkam / sample-environment temperature setpoint.
+      Confirm the actual record name (this prefix came from
+      PLAN_INSTRUMENT_INTEGRATION.md 4.3, not from a caget), confirm the
+      units are degrees C, and confirm 20-300 is inside the stage's own
+      limits before deploying. A setpoint outside the stage limits is
+      normally clamped by the IOC, but do not rely on that.
+    range: [20.0, 300.0]
+    units: "C"
+    confirm: true
+    rate_limit_per_min: 4
+
+  # ---- TODO(verify): real PV, unverified safe range. ----
+  # Left commented out on purpose: the record is real (it appears in
+  # BeamlineAdvisor), but nobody has written down what a safe range for it
+  # is. Uncomment only once someone has.
+  # - pattern: "usxRIO:GalilAo1_SP.VAL"
+  #   note: "TODO(verify) -- Galil analog output setpoint. Range unknown."
+  #   range: [0.0, 10.0]
+  #   units: "V"
+  #   confirm: true
+  #   rate_limit_per_min: 6
+
+  # ---- Example of an enum-constrained write, for reference. ----
+  # - pattern: "usxLAX:shutter:mode"
+  #   note: "TODO(verify) -- shutter auto/manual mode."
+  #   enum: ["auto", "manual"]
+  #   confirm: true
+  #   rate_limit_per_min: 6

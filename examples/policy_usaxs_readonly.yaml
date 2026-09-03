@@ -1,0 +1,93 @@
+# epics-mcp policy -- USAXS / 12-IDE, READ-ONLY.
+#
+# This is the policy for the `usaxs-user` AIDA workspace and for anyone who
+# should be able to *ask* about the instrument but never change it. It grants
+# no writes at all: `mode: read-only` means the `epics_pv_put` tool is not
+# even registered, so a client cannot see it, let alone call it.
+#
+# Copy this file, do not edit it in place:
+#     mkdir -p ~/.epics-mcp/policies
+#     cp examples/policy_usaxs_readonly.yaml ~/.epics-mcp/policies/usaxs-user.yaml
+#     epics-mcp --policy usaxs-user
+#
+# PV names below are the ones aievaluator's instrument checks actually read
+# (aievaluator/config/instrument_usaxs.yaml), plus glob coverage for the
+# USAXS IOCs so ad-hoc questions ("what is usxLAX:m58:c0:m1.RBV right now?")
+# work without editing this file for every motor.
+
+version: 1
+mode: read-only
+
+# Every Channel Access call is bounded. A disconnected PV comes back as
+# {"connected": false} -- never an exception -- so one dead IOC does not turn
+# a status question into a tool error.
+default_timeout_s: 3.0
+max_pvs_per_call: 50
+max_watch_seconds: 30
+max_watch_samples: 300
+
+# Human-readable PV names for `epics_pv_search`. Channel Access has no name
+# lookup, so the catalog is the only way the model can discover PVs.
+catalog: pv_catalog_usaxs.txt
+
+audit:
+  # Path is expanded (~ and $VARS) and created on start. Reads are off by
+  # default: they are harmless and high-volume. Turn them on while
+  # commissioning a new policy to see what the model actually asks for.
+  path: ~/.epics-mcp/audit-usaxs-user.log
+  log_reads: false
+  log_denials: true
+
+# ---------------------------------------------------------------------------
+# deny -- consulted FIRST, wins over everything below, applies to reads and
+# writes alike. Patterns are fnmatch globs; a "re:" prefix means a Python
+# regular expression, anchored (fullmatch).
+# ---------------------------------------------------------------------------
+deny:
+  - pattern: "re:^12idb.*"
+    note: "B station is not ours. Never read it, never write it, never ask."
+  - pattern: "12idd*"
+    note: "D station is not ours."
+  - pattern: "*.PROC"
+    note: "Reading .PROC is harmless, but denying it here documents intent."
+
+# ---------------------------------------------------------------------------
+# allow -- a PV is readable if it matches one of these AND no deny rule.
+# No allow rule means no access: an empty or missing allow list is a valid
+# policy that grants nothing.
+# ---------------------------------------------------------------------------
+allow:
+  # --- USAXS instrument IOCs: usxLAX, usxRIO, usxAERO, usxTEMP, usxSTEP ---
+  - pattern: "usx*"
+    note: "All USAXS instrument IOCs (motors, slits, scalers, Linkam, ADAM)."
+
+  # --- Storage ring ---
+  - pattern: "XFD:srCurrent"
+    note: "APS storage ring current, mA."
+
+  # --- Undulator ---
+  - pattern: "S12ID:USID:*"
+    note: "12-ID insertion device: energy setpoint, harmonic."
+
+  # --- 12-ID-A2: white-beam slits, mirror, mono, slit 3 ---
+  - pattern: "12ida2:*"
+    note: "A2 optics: EnCalc, SL2 white-beam slits, table1, m37-m40, AShtr."
+
+  # --- 12-ID-C: SR570 amplifier sensitivity (flux normalisation) ---
+  - pattern: "12idc:*"
+    note: "C-station amplifier: A2sens_num, A2sens_unit."
+
+  # --- Personnel safety beam-ready signals ---
+  - pattern: "PA:12ID:STA_*_BEAMREADY_PL.VAL"
+    note: "A and C hutch beam-ready interlock status (read-only by design)."
+
+  # --- Filter transmission calculator ---
+  - pattern: "re:^12idPyFilter:.*"
+    note: "Python filter/attenuator server."
+
+# ---------------------------------------------------------------------------
+# writes -- empty. With `mode: read-only` above this list is not even
+# consulted; it is spelled out as an empty list so that flipping `mode` alone
+# still grants nothing.
+# ---------------------------------------------------------------------------
+writes: []

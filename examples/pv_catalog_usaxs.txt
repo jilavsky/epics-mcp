@@ -1,0 +1,67 @@
+# PV catalog -- USAXS / 12-IDE
+#
+# Channel Access has no name-search protocol, so `epics_pv_search` searches
+# this file instead. It has a second job that matters more: it gives the
+# model human-readable names for cryptic records, so it can answer "what is
+# the guard slit vertical size?" without the user knowing that the answer
+# lives in usxLAX:GSlit1V:t2.C.
+#
+# Format: one entry per line,  PV<whitespace>description
+# Blank lines and lines starting with # are ignored.
+# A PV listed here is NOT thereby allowed -- the policy file is the only
+# thing that grants access. Listing an unreachable or denied PV is harmless.
+#
+# The entries below are drawn from aievaluator's instrument checks
+# (aievaluator/config/instrument_usaxs.yaml). Extend freely; this file is
+# documentation, not a boundary.
+
+# --- Storage ring ---------------------------------------------------------
+XFD:srCurrent                      APS storage ring current (mA)
+
+# --- Insertion device -----------------------------------------------------
+S12ID:USID:EnergySetC.VAL          Undulator energy setpoint (keV)
+S12ID:USID:HarmonicValueC          Undulator harmonic number (1, 3 or 5)
+
+# --- Shutters and personnel safety ---------------------------------------
+12ida2:AShtr:Enable                A shutter enable (1 = enabled)
+PA:12ID:STA_A_BEAMREADY_PL.VAL     A shutter beam ready (canted beamline auto-opener)
+PA:12ID:STA_C_BEAMREADY_PL.VAL     E-station (C hutch) shutter beam ready
+
+# --- Monochromator and A2 optics -----------------------------------------
+12ida2:EnCalc                      Monochromator energy readback (keV)
+12ida2:table1.Y                    Mirror table vertical position (mm)
+12ida2:SL2:hCenter.RBV             White-beam slit horizontal centre (mm)
+12ida2:SL2:hSize.RBV               White-beam slit horizontal size (mm)
+12ida2:SL2:vCenter.RBV             White-beam slit vertical centre (mm)
+12ida2:SL2:vSize.RBV               White-beam slit vertical size (mm)
+12ida2:m37.RBV                     Slit 3 top blade position (mm)
+12ida2:m38.RBV                     Slit 3 bottom blade position (mm)
+12ida2:m39.RBV                     Slit 3 inboard blade position (mm)
+12ida2:m40.RBV                     Slit 3 outboard blade position (mm)
+
+# --- Flux measurement -----------------------------------------------------
+usxLAX:vsc:c2_cts1.B               Diode counts (raw flux, counts/s before gain normalisation)
+12idc:A2sens_num.VAL               SR570 sensitivity number (index into 1/2/5/10/20/50/100/200/500)
+12idc:A2sens_unit.VAL              SR570 sensitivity unit (0=pA/V, 1=nA/V, 2=uA/V, 3=mA/V)
+
+# --- USAXS slits ----------------------------------------------------------
+usxLAX:m58:c1:m5.RBV               USAXS slit vertical centre (mm)
+usxLAX:m58:c1:m6.RBV               USAXS slit horizontal centre (mm)
+usxLAX:m58:c1:m7.RBV               USAXS slit vertical size (mm)
+usxLAX:m58:c1:m8.RBV               USAXS slit horizontal size (mm)
+
+# --- Guard slits ----------------------------------------------------------
+usxLAX:m58:c0:m7.RBV               Guard slit X position (mm)
+usxLAX:GSlit1H:t2.C                Guard slit horizontal size (mm)
+usxLAX:GSlit1V:t2.C                Guard slit vertical size (mm)
+
+# --- Hutch and beam-in-hutch ---------------------------------------------
+usxLAX:adam1:rtd0.VAL              E-hutch air temperature (C)
+usxLAX:blCalc:userCalc1.VAL        Beam-in-hutch calculated flag
+
+# --- Motors seen in BeamlineAdvisor (descriptions to be confirmed) --------
+usxLAX:m58:c0:m1                   USAXS motor c0:m1 -- TODO(describe)
+usxLAX:m58:c0:m2                   USAXS motor c0:m2 -- TODO(describe)
+usxLAX:mxv:c0:m1                   USAXS mxv motor c0:m1 -- TODO(describe)
+usxLAX:userCalc2.VAL               User calculation 2 output
+usxRIO:GalilAo1_SP.VAL             Galil analog output 1 setpoint -- TODO(describe, units)

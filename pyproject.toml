@@ -1,0 +1,97 @@
+[build-system]
+requires = ["setuptools>=77.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "epics-mcp"
+version = "0.1.0.dev0"
+description = "Policy-gated MCP server for EPICS Channel Access: safe, auditable PV reads and constrained writes."
+readme = {file = "README.md", content-type = "text/markdown"}
+# Floor is 3.10 to match the house standard (pyirena, aievaluator). The conda
+# environment pins >=3.11 so one env can also hold AIDA (requires-python
+# >=3.11) on usaxscontrol -- see environment.yml.
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name = "Jan Ilavsky", email = "ilavsky@anl.gov"}]
+maintainers = [{name = "Jan Ilavsky", email = "ilavsky@anl.gov"}]
+keywords = ["EPICS", "Channel Access", "MCP", "Model Context Protocol", "beamline", "instrument control"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: System :: Monitoring",
+]
+
+dependencies = [
+    # The policy file is the safety boundary; parsing it is not optional.
+    "pyyaml>=6.0",
+    # Same pin and same reason as pyirena[mcp] and aievaluator[mcp]: mcp 2.0
+    # removed mcp.server.fastmcp, which this server is built on. A shared
+    # conda env with pyirena/aievaluator must not be able to resolve mcp 2.x.
+    "mcp>=1.0.0,<2.0",
+    # Channel Access. Imported lazily (see PLAN.md 5.2) so the policy engine,
+    # the CLI's --help, --check and the whole test suite import cleanly on a
+    # machine with no EPICS installed.
+    "pyepics>=3.5",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-cov", "pytest-timeout", "ruff", "build", "twine"]
+
+[project.urls]
+Homepage = "https://github.com/jilavsky/epics-mcp"
+Repository = "https://github.com/jilavsky/epics-mcp"
+Issues = "https://github.com/jilavsky/epics-mcp/issues"
+Changelog = "https://github.com/jilavsky/epics-mcp/blob/main/CHANGELOG.md"
+
+# Commented out until src/epics_mcp/cli.py exists (PLAN.md 6, phase 4).
+# Declaring it now would install an `epics-mcp` command whose only behaviour
+# is a ModuleNotFoundError traceback. Uncomment in the same commit that adds
+# cli.py, and re-enable the console-script smoke test in .github/workflows/ci.yml.
+# [project.scripts]
+# epics-mcp = "epics_mcp.cli:main"
+
+# DEVIATION from the house standard (flat <pkg>/ at repo root, as in pyirena
+# and aievaluator): a src/ layout, chosen deliberately to match AIDA
+# (src/aida) and the package sketch in Aida/PLAN_INSTRUMENT_INTEGRATION.md
+# 4.6. The practical reason it is worth the inconsistency here: this package
+# ships example policy YAML and a PV catalog at the repo root under
+# examples/, and a src/ layout makes it impossible for a bare `pytest` in the
+# repo root to import the source tree instead of the installed package --
+# which for a package whose whole job is enforcing a safety boundary is worth
+# the extra directory.
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["epics_mcp*"]
+
+[tool.setuptools.package-data]
+epics_mcp = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+timeout = 120
+timeout_method = "thread"
+markers = [
+    "ioc: needs a live EPICS IOC reachable over Channel Access (deselected by default; run with -m ioc at the beamline)",
+]
+# CA tests are opt-in: CI has no IOC.
+addopts = "-m 'not ioc'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# Full house standard -- this package is new, so there is no legacy to grandfather.
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501", "E741", "E701", "E702", "E402"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/epics_mcp/__init__.py" = ["F401"]

@@ -1,0 +1,43 @@
+name: epics-mcp
+
+# epics-mcp is designed to co-live with pyirena, aievaluator and AIDA in a
+# single environment on the beamline control machine. Two supported ways to
+# install it:
+#
+#   1. Its own environment (this file):
+#          conda env create -f environment.yml
+#          conda activate epics-mcp
+#
+#   2. Into the environment that already holds pyirena / aievaluator / AIDA
+#      -- the usual choice on usaxscontrol, because AIDA launches this server
+#      as a subprocess and one env means one interpreter path to configure:
+#          conda activate pyirena          # or aievaluator
+#          conda install -c conda-forge pyepics
+#          pip install -e .
+#
+# Python floor is 3.11 here, not the package's own >=3.10, so this env can
+# also hold AIDA (requires-python >=3.11) when all four packages share one
+# env. Cap <3.14 mirrors pyirena and aievaluator: compiled wheels lag 3.14.
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python>=3.11,<3.14
+
+  # Channel Access. conda-forge ships libca with the package; pip wheels do
+  # so less reliably across platforms, and this is the one dependency whose
+  # native library actually has to work.
+  - pyepics>=3.5
+
+  - pyyaml>=6.0
+
+  # Development / testing
+  - pytest>=7.0
+  - pytest-cov
+
+  - pip
+  - pip:
+      # `mcp` is not on conda-forge as a maintained build; pip it.
+      - -e ".[dev]"
