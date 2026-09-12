@@ -15,6 +15,7 @@ session (see PLAN.md's own worked example).
 from __future__ import annotations
 
 import asyncio
+import json
 import pathlib
 
 import pytest
@@ -343,3 +344,76 @@ def test_registration_and_wire_round_trip(tmp_path):
             await server.mcp.call_tool("epics_pv_get", {"names": ["usxSECRET:foo"]})
 
     asyncio.run(scenario())
+
+
+# --- value shapes through the tool layer (strings, waveforms, enums) --------
+
+
+def test_pv_get_returns_char_waveform_as_a_string(tmp_path):
+    """End to end for the reported bug: a CHAR waveform must reach the
+    client as text, not as an array of integers."""
+    path = "/share1/USAXS_data/2026-09/09_12_Randy"
+    configure_with(
+        tmp_path,
+        base_policy(),
+        backend=FakeBackend(
+            values={"usx:userDir": [ord(c) for c in path] + [0]},
+            field_types={"usx:userDir": "time_char"},
+        ),
+    )
+    reading = server.epics_pv_get(["usx:userDir"])[0]
+    assert reading["value"] == path
+
+
+def test_pv_get_truncates_a_large_waveform_per_policy(tmp_path):
+    configure_with(
+        tmp_path,
+        base_policy(max_array_points=10),
+        backend=FakeBackend(values={"usx:wf": list(range(8000))}, max_array_points=10),
+    )
+    reading = server.epics_pv_get(["usx:wf"])[0]
+    assert len(reading["value"]) == 10
+    assert reading["count"] == 8000
+    assert reading["truncated"] is True
+
+
+def test_pv_get_output_is_json_serializable_for_every_value_shape(tmp_path):
+    """The bug was a serialization failure, so assert serializability
+    directly rather than only checking the Python-side values."""
+    configure_with(
+        tmp_path,
+        base_policy(max_pvs_per_call=10),
+        backend=FakeBackend(
+            values={
+                "usx:scalar": 1.5,
+                "usx:text": "hello",
+                "usx:chars": [ord("h"), ord("i"), 0],
+                "usx:wf": list(range(500)),
+                "usx:enum": 1,
+                "usx:nan": float("nan"),
+            },
+            field_types={"usx:chars": "time_char", "usx:enum": "time_enum"},
+            enum_strings={"usx:enum": ("zero", "one")},
+        ),
+    )
+    readings = server.epics_pv_get(
+        ["usx:scalar", "usx:text", "usx:chars", "usx:wf", "usx:enum", "usx:nan"]
+    )
+    json.dumps(readings)  # must not raise
+    by_pv = {r["pv"]: r for r in readings}
+    assert by_pv["usx:chars"]["value"] == "hi"
+    assert by_pv["usx:enum"]["enum_string"] == "one"
+    assert by_pv["usx:nan"]["value"] is None
+
+
+def test_pv_info_reports_field_type_and_count(tmp_path):
+    configure_with(
+        tmp_path,
+        base_policy(),
+        backend=FakeBackend(
+            values={"usx:wf": list(range(300))}, field_types={"usx:wf": "time_double"}
+        ),
+    )
+    info = server.epics_pv_info("usx:wf")
+    assert info["field_type"] == "time_double"
+    assert info["count"] == 300

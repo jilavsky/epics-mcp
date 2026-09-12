@@ -548,3 +548,28 @@ def test_staff_example_can_write_the_verified_scratch_record():
 def test_staff_example_readonly_flag_disables_all_writes():
     policy = Policy.load(EXAMPLES / "policy_usaxs_staff.yaml", force_readonly=True)
     assert policy.can_write("usxLAX:userCalc3.A", 42.0).allowed is False
+
+
+def test_default_max_array_points_matches_ca_client():
+    """policy.py deliberately duplicates this constant instead of importing
+    it, to keep its stdlib+yaml-only import list (PLAN.md 5). This pins the
+    two together so the duplication cannot drift."""
+    from epics_mcp import ca_client
+    from epics_mcp import policy as policy_mod
+
+    assert policy_mod.DEFAULT_MAX_ARRAY_POINTS == ca_client.DEFAULT_MAX_ARRAY_POINTS
+
+
+def test_max_array_points_defaults_and_is_overridable(tmp_path):
+    from epics_mcp.policy import DEFAULT_MAX_ARRAY_POINTS
+
+    path = write_policy(tmp_path, base_policy())
+    assert Policy.load(path).max_array_points == DEFAULT_MAX_ARRAY_POINTS
+
+    path = write_policy(tmp_path, base_policy(max_array_points=7), name="custom.yaml")
+    assert Policy.load(path).max_array_points == 7
+
+
+def test_max_array_points_appears_in_describe(tmp_path):
+    path = write_policy(tmp_path, base_policy(max_array_points=12))
+    assert Policy.load(path).describe()["max_array_points"] == 12

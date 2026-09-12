@@ -6,10 +6,15 @@ It lets an AI assistant answer "what is `usxLAX:m58:c0:m1.RBV` right now?"
 or "has the Linkam reached temperature?" — and, only where a policy file
 explicitly permits it and within bounds that file states, change a value.
 
-> **Status: pre-alpha. No implementation yet.** This repository currently
-> holds the packaging, the environment, the example policies and
-> [`PLAN.md`](PLAN.md), which is the design under review. Nothing here can
-> talk to an instrument.
+> **Status: alpha.** The read path, the policy engine, the audit log and the
+> constrained write path are implemented and tested, and the read tools have
+> been exercised against a live USAXS instrument through a CA gateway.
+>
+> **The write path has never touched a real IOC** — only the fake backend —
+> and has not run read-only at a beamline long enough to learn what an agent
+> actually asks for. Do not point a `mode: read-write` policy at real
+> Channel Access until both have happened (see [`PLAN.md`](PLAN.md) §6).
+> The HTTP transport works but has no bearer-token auth yet.
 
 ## Why a separate package
 
@@ -35,18 +40,37 @@ audit log stamped with the SHA-256 of the policy text that permitted it.
 Client-side controls — AIDA's `confirm_tools`, `disabled_tools` — are a
 useful second layer, not a boundary. See [`PLAN.md`](PLAN.md) §4.
 
-## Planned tool surface
+## Tool surface
 
 | Tool | Purpose |
 |---|---|
 | `epics_pv_get` | values for up to `max_pvs_per_call` PVs |
-| `epics_pv_info` | units, limits, precision, enum strings, `.DESC` |
+| `epics_pv_info` | units, limits, precision, enum strings, `.DESC`, field type, element count |
 | `epics_pv_watch` | bounded short monitor — "is it still moving?" |
 | `epics_pv_put` | constrained write; **not registered at all** in read-only mode |
 | `epics_policy_describe` | the effective policy in plain text |
 | `epics_pv_search` | search a static PV catalog file (CA has no name lookup) |
 
 No `pv_list_all`, no array writes, no `.PROC`, no unbounded monitors.
+
+### What a reading looks like
+
+Values are coerced into JSON-safe shapes before they reach the client, which
+matters more than it sounds: EPICS stores any string longer than 40
+characters as a CHAR waveform, so a naive read of `usxLAX:userDir` returns an
+array of 39 integers rather than
+`/share1/USAXS_data/2026-09/09_12_Randy`.
+
+- **CHAR waveforms decode to strings** (paths, sample titles, status text).
+- **Numeric waveforms come back as lists**, truncated to `max_array_points`
+  (default 100). The reading's `count` is always the *true* element count and
+  `truncated` says whether you are seeing all of it — an 8000-point scan
+  array arrives as 100 numbers with `count: 8000, truncated: true`.
+- **Enum records carry their label**: `value: 0, enum_string: "Passive"`.
+- **`NaN`/`Infinity` become `null`**, because they are not valid JSON and one
+  undefined reading would otherwise make a whole response unparseable.
+
+See [`PLAN.md`](PLAN.md) §3.2 for the full table and the reasoning.
 
 ## Install
 

@@ -33,6 +33,14 @@ max_pvs_per_call: 50
 max_watch_seconds: 30
 max_watch_samples: 300
 
+# How many elements of an array-valued PV a read returns. A read of an
+# 8000-point scan waveform (usxLAX:scan1.P1PA is exactly that) comes back as
+# the first 100 numbers, with the reading's `count` field reporting the true
+# 8000 and `truncated: true` saying so. CHAR waveforms are decoded to strings
+# and are not affected by this. Raise it if staff genuinely need to see more
+# of an array through the assistant; every element costs context.
+max_array_points: 100
+
 # Ceiling across all write rules, on top of each rule's own rate_limit_per_min.
 # A runaway agent hits this before it hits anything mechanical.
 max_writes_per_min: 10

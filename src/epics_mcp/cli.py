@@ -135,7 +135,11 @@ def _run_serve(args: argparse.Namespace) -> int:
     # must keep working on a machine that has not installed the mcp extra.
     from epics_mcp import server
 
-    backend = FakeBackend() if args.backend == "fake" else PyepicsBackend()
+    backend = (
+        FakeBackend(max_array_points=policy.max_array_points)
+        if args.backend == "fake"
+        else PyepicsBackend(max_array_points=policy.max_array_points)
+    )
     server.configure(policy, backend=backend, client_label=f"epics-mcp-cli/{__version__}")
 
     if args.transport == "http":

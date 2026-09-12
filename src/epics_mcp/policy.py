@@ -35,6 +35,15 @@ BUILTIN_WRITE_DENIED_FIELDS = (
 _GLOB_WILDCARD_CHARS = "*?["
 _SUPPORTED_VERSION = 1
 
+# Default cap on how many elements of an array-valued PV a read returns.
+#
+# Deliberately duplicated from ``ca_client.DEFAULT_MAX_ARRAY_POINTS`` rather
+# than imported: this module imports nothing but the standard library and
+# yaml (PLAN.md 5), so that ``aievaluator`` can depend on the policy engine
+# without dragging in anything else. ``tests/test_policy.py`` asserts the two
+# constants stay equal, so the duplication cannot silently drift.
+DEFAULT_MAX_ARRAY_POINTS = 100
+
 
 class PolicyError(Exception):
     """The policy file is missing, malformed, or internally contradictory."""
@@ -254,6 +263,7 @@ class Policy:
         max_pvs_per_call: int,
         max_watch_seconds: int,
         max_watch_samples: int,
+        max_array_points: int,
         max_writes_per_min: int | None,
         catalog_path: Path | None,
         audit: AuditConfig | None,
@@ -271,6 +281,7 @@ class Policy:
         self.max_pvs_per_call = max_pvs_per_call
         self.max_watch_seconds = max_watch_seconds
         self.max_watch_samples = max_watch_samples
+        self.max_array_points = max_array_points
         self.max_writes_per_min = max_writes_per_min
         self.catalog_path = catalog_path
         self.audit = audit
@@ -395,6 +406,7 @@ class Policy:
             max_pvs_per_call=int(data.get("max_pvs_per_call", 50)),
             max_watch_seconds=int(data.get("max_watch_seconds", 30)),
             max_watch_samples=int(data.get("max_watch_samples", 300)),
+            max_array_points=int(data.get("max_array_points", DEFAULT_MAX_ARRAY_POINTS)),
             max_writes_per_min=max_writes_per_min,
             catalog_path=catalog_path,
             audit=audit_cfg,
@@ -527,6 +539,7 @@ class Policy:
             "max_pvs_per_call": self.max_pvs_per_call,
             "max_watch_seconds": self.max_watch_seconds,
             "max_watch_samples": self.max_watch_samples,
+            "max_array_points": self.max_array_points,
             "max_writes_per_min": self.max_writes_per_min,
             "builtin_write_denies_disabled": self.builtin_write_denies_disabled,
             "allow": [{"pattern": r.pattern, "note": r.note} for r in self.allow],

@@ -109,7 +109,11 @@ def configure(
     """
     global _state
 
-    resolved_backend = backend if backend is not None else PyepicsBackend()
+    resolved_backend = (
+        backend
+        if backend is not None
+        else PyepicsBackend(max_array_points=policy.max_array_points)
+    )
 
     audit_log = None
     if policy.audit is not None:
@@ -191,11 +195,26 @@ def _check_read_or_raise(name: str) -> None:
 def epics_pv_get(names: list[str]) -> list[dict]:
     """Read one or more PVs.
 
-    Returns one reading per name, in order:
-    {pv, value, units, connected, timestamp, severity, status, error}.
+    Returns one reading per name, in order: {pv, value, units, connected,
+    timestamp, severity, status, error, count, truncated, enum_string}.
     A disconnected or slow PV comes back as {"connected": false,
     "error": "..."} -- never an exception -- so one dead IOC does not fail
     a batch of otherwise-fine reads.
+
+    Value types you should expect:
+      - Scalars come back as numbers or strings.
+      - A CHAR waveform (how EPICS stores any string longer than 40
+        characters -- paths, titles, status messages) comes back as a
+        STRING, already decoded. `count` is the waveform's element count,
+        not the string's length.
+      - A numeric waveform comes back as a LIST, truncated to the policy's
+        max_array_points. `count` is always the TRUE element count and
+        `truncated` says whether you are seeing all of it -- so a 8000-point
+        scan array arrives as 100 numbers with count=8000, truncated=true.
+      - An enum record gives the numeric `value` plus `enum_string`, its
+        label (e.g. value=0, enum_string="Passive"). Quote the label.
+      - An undefined float (NaN/Inf) is reported as null, because those are
+        not valid JSON.
 
     Every name must be allowed by the server's policy; if unsure what that
     covers, call epics_policy_describe() first. Any denied name raises

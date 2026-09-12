@@ -1,6 +1,9 @@
 # epics-mcp — implementation plan
 
-**Status: proposal, 2026-09-03. No implementation code yet.**
+**Status: phases 0-6 implemented; 7 partial, 8 not started (see §6).**
+Originally written 2026-09-03 as a pre-implementation proposal; kept as the
+living design document, with later corrections marked where the plan and
+the code disagreed.
 Companion to `Aida/PLAN_INSTRUMENT_INTEGRATION.md` §4, which is the source
 document for this package. That section decided *whether* to build it and
 *where* it lives; this file decides *how*.
@@ -44,15 +47,29 @@ explicit answer: **`epics_mcp.ca_client` is a separate implementation, and
 that is deliberate.** Importing `epics_io` would invert the dependency
 arrow above. What we do instead:
 
-- `epics_mcp.ca_client.PvReading` is **field-for-field identical** to
-  `aievaluator.epics_io.PvReading` (`pv, value, units, connected, timestamp,
-  severity, status, error`). A test asserts this by reflection when
-  aievaluator happens to be importable, and skips when it is not.
+- `epics_mcp.ca_client.PvReading` is a **superset** of
+  `aievaluator.epics_io.PvReading`: every field aievaluator defines
+  (`pv, value, units, connected, timestamp, severity, status, error`) is
+  present with the same name and meaning, plus `count`, `truncated` and
+  `enum_string`. Two tests assert this by reflection when aievaluator is
+  importable — one that nothing of theirs went missing, one pinning the
+  extras to exactly those three so a fourth cannot appear by accident.
+  *(Originally this was exact equality. It was relaxed when array/string/
+  enum support landed — §3.2 — because the extra fields have no counterpart
+  in aievaluator's fixed scalar checks. The half of the invariant that
+  protects interoperability is "nothing of theirs disappears", and that
+  still holds exactly.)*
 - The duplicated surface is ~80 lines of get/wait/disconnect. The write
-  path, the field introspection (`pv_info`), the monitor and the policy hook
-  have no counterpart in `epics_io` at all.
+  path, the field introspection (`pv_info`), the monitor, the value
+  coercion (§3.2) and the policy hook have no counterpart in `epics_io` at
+  all.
 - If the duplication ever bites, the merge direction is: aievaluator drops
-  `epics_io` and depends on `epics-mcp` — not the reverse.
+  `epics_io` and depends on `epics-mcp` — not the reverse. Worth noting:
+  `epics_io.py:106` is a bare `pv.get(timeout=timeout)`, so it carries the
+  same CHAR-waveform and numpy-serialization problem §3.2 fixes here. It is
+  *latent* there, not live — every PV in aievaluator's instrument config is
+  a numeric scalar — but it would bite the moment someone adds a string PV
+  to a check, and a merge in this direction would fix it for free.
 
 ---
 
@@ -97,8 +114,8 @@ convention `pyirena_*` already uses.
 
 | Tool | Args | Returns |
 |---|---|---|
-| `epics_pv_get` | `names: list[str]` | one `PvReading` per name, in order |
-| `epics_pv_info` | `name: str` | units, `LOPR`/`HOPR`, `DRVL`/`DRVH`, `PREC`, `.DESC`, enum strings, record type, writability under the current policy |
+| `epics_pv_get` | `names: list[str]` | one `PvReading` per name, in order; values coerced to JSON-safe shapes (§3.2) |
+| `epics_pv_info` | `name: str` | units, `LOPR`/`HOPR`, `DRVL`/`DRVH`, `PREC`, `.DESC`, enum strings, CA field type, element count, writability under the current policy |
 | `epics_pv_watch` | `names`, `seconds`, `interval` | bounded time series: `{pv: [[t, value], ...]}` |
 | `epics_pv_put` | `name`, `value`, `confirm_token=None` | new value, old value, or a confirm challenge |
 | `epics_policy_describe` | — | the effective policy in plain text |
@@ -126,6 +143,45 @@ broken. `policy_describe` returns the allow patterns with their notes, the
 deny patterns, the mode, the write rules with their bounds, and the limits —
 i.e. the policy file's own comments are part of the product. This is why
 every example policy rule carries a `note:`.
+
+### 3.2 Value coercion — what a reading actually contains
+
+Raw pyepics values are frequently not JSON-serializable, and the MCP layer
+serializes a reading straight to the client, so **every value leaving
+`ca_client` is coerced** (`coerce_ca_value`). This is not cosmetic: before
+it existed, reading `usxLAX:userDir` failed the whole tool call with
+`Unable to serialize unknown type: <class 'numpy.ndarray'>`.
+
+| Raw from CA | Becomes | Why |
+|---|---|---|
+| CHAR waveform (`time_char`, count > 1) | `str`, NUL-terminated decode | EPICS has no long-string type; any string over 40 chars — a path, a title, a status message — is stored this way. `caget -S` does the same. `usxLAX:userDir` is 1022 elements holding `/share1/USAXS_data/2026-09/09_12_Randy`. |
+| numpy scalar | Python scalar | `json.dumps` cannot serialize `numpy.float64`. |
+| numpy/list array | `list`, truncated to `max_array_points` | `usxLAX:scan1.P1PA` is 8000 float64s. Sending all of it is ~100 kB of digits that answers no question the first hundred plus the true `count` do not. |
+| enum | numeric `value` + `enum_string` label | `SCAN = 0` is meaningless; `"Passive"` is the answer. Labels come from ctrlvars, cached per PV. |
+| `NaN` / `±Inf` | `null` | `json.dumps` renders these as the bare literals `NaN`/`Infinity`, which are not valid JSON — one undefined reading would make the whole response unparseable for a strict client. |
+| `bytes` | `str` | Same NUL-terminated decode. |
+
+Three deliberate choices worth challenging if they turn out wrong:
+
+- **Truncation, not decimation.** A truncated array shows the first N points;
+  a decimated one would show the shape of all 8000. Truncation is
+  unambiguous — every number returned is a real adjacent sample — and
+  `count`/`truncated` tell the model exactly what it is missing. pyIrena
+  decimates instead, because there the array *is* the data; here it is an
+  incidental read. Revisit if someone actually wants to see scan shapes
+  through this server rather than through Tiled.
+- **A CHAR array is always a string.** A genuine byte-array payload would be
+  mangled into text. At a beamline that case does not exist, and the
+  alternative — making the model ask for a decode — gets the common case
+  wrong every time. Only an explicit CHAR *field type* triggers this; an
+  integer array is never guessed to be text.
+- **`count` is the true element count, always**, even when `value` was
+  truncated or decoded to a shorter string. It is the one field that never
+  lies about how much is really there.
+
+`max_array_points` is a policy setting (default 100) rather than a tool
+argument, so a deployment can tune it without the model being able to ask
+for a 8000-element dump.
 
 ---
 

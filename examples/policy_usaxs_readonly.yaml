@@ -26,6 +26,14 @@ max_pvs_per_call: 50
 max_watch_seconds: 30
 max_watch_samples: 300
 
+# How many elements of an array-valued PV a read returns. A read of an
+# 8000-point scan waveform (usxLAX:scan1.P1PA is exactly that) comes back as
+# the first 100 numbers, with the reading's `count` field reporting the true
+# 8000 and `truncated: true` saying so. CHAR waveforms are decoded to strings
+# and are not affected by this. Raise it if staff genuinely need to see more
+# of an array through the assistant; every element costs context.
+max_array_points: 100
+
 # Human-readable PV names for `epics_pv_search`. Channel Access has no name
 # lookup, so the catalog is the only way the model can discover PVs.
 catalog: pv_catalog_usaxs.txt
