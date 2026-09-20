@@ -139,6 +139,11 @@ writes:
     confirm: true
     rate_limit_per_min: 4
 
+ # Exact names, re-granting reads through the broad denies above.
+  - pattern: "usxLAX:StopBeforeNextScan"
+  - pattern: "usxLAX:PauseBeforeNextScan"
+
+
   # ---- TODO(verify): real PV, unverified safe range. ----
   # Left commented out on purpose: the record is real (it appears in
   # BeamlineAdvisor), but nobody has written down what a safe range for it
