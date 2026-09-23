@@ -65,3 +65,7 @@ usxLAX:m58:c0:m2                   USAXS motor c0:m2 -- TODO(describe)
 usxLAX:mxv:c0:m1                   USAXS mxv motor c0:m1 -- TODO(describe)
 usxLAX:userCalc2.VAL               User calculation 2 output
 usxRIO:GalilAo1_SP.VAL             Galil analog output 1 setpoint -- TODO(describe, units)
+
+# --- Scan-sequencer flags (writable in the staff policy) ------------------
+usxLAX:StopBeforeNextScan          Stop the USAXS scan sequence after the current scan (1 = stop) -- TODO(verify)
+usxLAX:PauseBeforeNextScan         Pause the USAXS scan sequence after the current scan (1 = pause) -- TODO(verify)

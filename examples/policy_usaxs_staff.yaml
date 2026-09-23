@@ -139,10 +139,31 @@ writes:
     confirm: true
     rate_limit_per_min: 4
 
- # Exact names, re-granting reads through the broad denies above.
+  # ---- TODO(verify): scan-sequencer flags. Names from the USAXS bluesky
+  # instrument's user_data flags, not from a caget against the live IOC. ----
   - pattern: "usxLAX:StopBeforeNextScan"
-  - pattern: "usxLAX:PauseBeforeNextScan"
+    note: >
+      TODO(verify) -- "stop after the current scan finishes" flag. This is
+      the graceful way to halt the USAXS scan sequence: the running scan
+      completes and its data is saved, then the queue stops. It is NOT an
+      abort, and it is deliberately not .STOP (a motor .STOP field is never
+      writable -- PLAN.md 4.4). Confirm the record exists and confirm it
+      takes the numeric 0/1 rather than string labels before deploying;
+      if it is an enum record with labels, widen the enum below to match.
+      1 = stop before the next scan, 0 = clear the request.
+    enum: [0, 1]
+    confirm: true
+    rate_limit_per_min: 4
 
+  - pattern: "usxLAX:PauseBeforeNextScan"
+    note: >
+      TODO(verify) -- "pause after the current scan finishes" flag, the
+      recoverable sibling of StopBeforeNextScan. Same caveats: confirm the
+      record name and that it takes numeric 0/1.
+      1 = pause before the next scan, 0 = resume.
+    enum: [0, 1]
+    confirm: true
+    rate_limit_per_min: 4
 
   # ---- TODO(verify): real PV, unverified safe range. ----
   # Left commented out on purpose: the record is real (it appears in
